@@ -5,8 +5,10 @@ using ReplayMod;
 using UnityEngine;
 using UnityEngine.Rendering.PostProcessing;
 // Megagon
-using Il2CppMegagon.Downhill.Cameras;
+using Il2CppMegagon.Downhill.Players;
 using Il2CppMegagon.Downhill.Vehicle.Controller;
+
+using System.IO;
 
 [assembly: MelonInfo(typeof(ReplayTool), "Replay Tool", "0.0.1", "DevdudeX")]
 [assembly: MelonGame()]
@@ -23,17 +25,20 @@ namespace ReplayMod
 		private MelonPreferences_Entry<int> cfg_recordFrequency;
 
 		// Object References
-		private Transform playerBikeTransform;
-		private BikeLocomotion bikeMoveScript;
+		private Transform _playerBikeTransform;
+		private BikeLocomotion _bikeMoveScript;
+		private GameObject _playerReplayClone;
 
+		private bool _isRecording;
+		private bool _isReplaying;
+		private int _index1;
+		private int _index2;
+		private float _timer;
+		private float _timeValue;
+		private List<Snapshot> _frames;
 
-		private bool isRecording;
-		private bool isReplaying;
-		private int index1;
-		private int index2;
-		private float timer;
-		private float timeValue;
-		private List<Snapshot> frames;
+		private string _activeSceneName;
+		private string _replaySavePath;
 
 		public override void OnEarlyInitializeMelon()
 		{
@@ -50,6 +55,24 @@ namespace ReplayMod
 			cfg_recordFrequency = mainSettingsCat.CreateEntry<int>("RecordingFrequency", 45);
 
 			mainSettingsCat.SaveToFile();
+
+			// Get the path of the Game folder
+			string _replaySavePath = Path.GetDirectoryName(Application.dataPath) + "\\Replays";
+			//dataPath : D:\SteamLibrary\steamapps\common\Lonely Mountains - Downhill\Replays
+
+			// Output the Game data path to the console
+			LoggerInstance.Msg("Replay save location: " + _replaySavePath);
+		}
+
+		public override void OnSceneWasLoaded(int buildIndex, string sceneName)
+		{
+			//LoggerInstance.Msg($"Scene {sceneName} with build index {buildIndex} has been loaded!");
+			string[] blacklistedLoadScenes = {"Menu_Alps_01", "Menu_Autumn_01", "Menu_Canyon_01", "Menu_Rockies_01", "Menu_Island_01"};
+			if (Array.IndexOf(blacklistedLoadScenes, sceneName) == -1)
+			{
+				LoggerInstance.Msg($"Scene {sceneName} with build index {buildIndex} has been loaded!");
+				_activeSceneName = sceneName;
+			}
 		}
 
 		public override void OnUpdate()
@@ -60,11 +83,11 @@ namespace ReplayMod
 			}
 
 			HandleInputs();
-			if (isRecording)
+			if (_isRecording)
 			{
 				Record();
 			}
-			if (isReplaying)
+			if (_isReplaying)
 			{
 				// TODO: disable BikeLocomotion during replay
 				Replay();
@@ -76,7 +99,7 @@ namespace ReplayMod
 			// Recording
 			if (Input.GetKeyDown(KeyCode.Keypad7))
 			{
-				if (!isRecording) {
+				if (!_isRecording) {
 					StartRecording();
 				}
 				else {
@@ -87,7 +110,7 @@ namespace ReplayMod
 			// Replaying
 			if (Input.GetKeyDown(KeyCode.Keypad9))
 			{
-				if (!isReplaying) {
+				if (!_isReplaying) {
 					StartReplay();
 				}
 				else {
@@ -98,23 +121,20 @@ namespace ReplayMod
 
 		public void StartRecording()
 		{
-			if (playerBikeTransform == null)
-			{
-				Debug.Log("[ReplayMod]Debug: Grabbing player bike transform.");
-				playerBikeTransform = GameObject.Find("Bike(Clone)").GetComponent<Transform>();
+			if (_playerBikeTransform == null) {
+				_playerBikeTransform = GameObject.Find("Bike(Clone)").GetComponent<Transform>();
 			}
-			if (bikeMoveScript == null)
-			{
-				bikeMoveScript = playerBikeTransform.GetComponent<BikeLocomotion>();
+			if (_bikeMoveScript == null) {
+				_bikeMoveScript = _playerBikeTransform.GetComponent<BikeLocomotion>();
 			}
 
-			if (isRecording) StopReplay();
+			if (_isRecording) StopReplay();
 
-			frames = new List<Snapshot>();
-			timeValue = 0;
-			timer = 0;
-			isRecording = true;
-			isReplaying = false;
+			_frames = new List<Snapshot>();
+			_timeValue = 0;
+			_timer = 0;
+			_isRecording = true;
+			_isReplaying = false;
 
 			MelonEvents.OnGUI.Subscribe(DrawRecordingText, 100);
 
@@ -122,80 +142,88 @@ namespace ReplayMod
 		}
 		public void StopRecording()
 		{
-			isRecording = false;
-			isReplaying = false;
+			_isRecording = false;
+			_isReplaying = false;
 
 			MelonEvents.OnGUI.Unsubscribe(DrawRecordingText);
 
-			LoggerInstance.Msg("Replay recording stopped. Saved " + frames.Count + " frames.");
+			LoggerInstance.Msg("Replay recording stopped. Saved " + _frames.Count + " frames.");
 		}
 
 		public void StartReplay()
 		{
-			if (isRecording) {
+			if (_isRecording) {
 				LoggerInstance.Msg("Error starting replay. Currently recording.");
 				return;
 			}
-			if (frames.Count <= 0) {
+			if (_frames.Count <= 0) {
 				LoggerInstance.Msg("Error starting replay. No frames to play.");
 				return;
 			}
 
 			MelonEvents.OnGUI.Subscribe(DrawInfoText, 100);
 
-			timeValue = 0;
-			index1 = 0;
-			index2 = 0;
-			isRecording = false;
-			isReplaying = true;
+			_timeValue = 0;
+			_index1 = 0;
+			_index2 = 0;
+			_isRecording = false;
+			_isReplaying = true;
 
 			// Disable interfering stuff
-			//camScript.enabled = false;
-			bikeMoveScript.enabled = false;
+			CreateReplayClone();
 
-			LoggerInstance.Msg("Replay started. Playing " + frames.Count + " frames.");
+			LoggerInstance.Msg("Replay started. Playing " + _frames.Count + " frames.");
 		}
+
+		public void CreateReplayClone()
+		{
+			_playerReplayClone = GameObject.Instantiate(_playerBikeTransform.gameObject);
+			GameObject.Destroy(_playerReplayClone.GetComponent<BikeLocomotion>());
+			GameObject.Destroy(_playerReplayClone.GetComponent<PlayerCameraTarget>());
+			GameObject.Destroy(_playerReplayClone.GetComponent<Stamina>());
+		}
+
 		public void StopReplay()
 		{
 			MelonEvents.OnGUI.Unsubscribe(DrawInfoText);
-			index1 = 0;
-			index2 = 0;
+			_index1 = 0;
+			_index2 = 0;
 
-			isRecording = false;
-			isReplaying = false;
+			_isRecording = false;
+			_isReplaying = false;
 
-			// Reenable interfering stuff
-			//camScript.enabled = true;
-			bikeMoveScript.enabled = true;
+			// Remove the clone
+			GameObject.Destroy(_playerReplayClone);
 
 			LoggerInstance.Msg("Replay was stopped.");
 		}
 
 		public void Record()
 		{
-			timer += Time.unscaledDeltaTime;
-			timeValue += Time.unscaledDeltaTime;
+			_timer += Time.unscaledDeltaTime;
+			_timeValue += Time.unscaledDeltaTime;
 
-			if (timer >= 1 / cfg_recordFrequency.Value)
+			if (_timer >= 1 / cfg_recordFrequency.Value)
 			{
 				Snapshot newFrame = new Snapshot(
-					timeValue,
-					playerBikeTransform.position,
-					playerBikeTransform.rotation
+					_timeValue,
+					_playerBikeTransform.position,
+					_playerBikeTransform.rotation
 				);
 
-				frames.Add(newFrame);
-				timer = 0;
+				_frames.Add(newFrame);
+				_timer = 0;
 			}
 		}
 
 		public void Replay()
 		{
-			if (timeValue <= frames[frames.Count - 1].timestamp)
+			if (_timeValue <= _frames[_frames.Count - 1].timestamp)
 			{
-				timeValue += Time.unscaledDeltaTime;
+				_timeValue += Time.unscaledDeltaTime;
 				GetIndex();
-				SetTransformState();
+				//SetTransformState();	// FIXME
+				SetTransformStateClone();
 			}
 			else {
 				LoggerInstance.Msg("Replay ended.");
@@ -205,23 +233,23 @@ namespace ReplayMod
 
 		public void GetIndex()
 		{
-			for (int i = 0; i < frames.Count - 2; i++)
+			for (int i = 0; i < _frames.Count - 2; i++)
 			{
-				if (frames[i].timestamp == timeValue)
+				if (_frames[i].timestamp == _timeValue)
 				{
-					index1 = i;
-					index2 = i;
+					_index1 = i;
+					_index2 = i;
 					return;
 				}
-				else if (frames[i].timestamp < timeValue & timeValue < frames[i + 1].timestamp)
+				else if (_frames[i].timestamp < _timeValue & _timeValue < _frames[i + 1].timestamp)
 				{
-					index1 = i;
-					index2 = i + 1;
+					_index1 = i;
+					_index2 = i + 1;
 					return;
 				}
 			}
-			index1 = frames.Count - 1;
-			index2 = frames.Count - 1;
+			_index1 = _frames.Count - 1;
+			_index2 = _frames.Count - 1;
 		}
 
 		/// <summary>
@@ -229,17 +257,33 @@ namespace ReplayMod
 		/// </summary>
 		public void SetTransformState()
 		{
-			if (index1 == index2)
+			if (_index1 == _index2)
 			{
-				playerBikeTransform.position = frames[index1].pos;
-				playerBikeTransform.rotation = frames[index1].rot;
+				_playerBikeTransform.position = _frames[_index1].pos;
+				_playerBikeTransform.rotation = _frames[_index1].rot;
 			}
 			else
 			{
-				float interpolationFactor = (timeValue - frames[index1].timestamp) / (frames[index2].timestamp - frames[index1].timestamp);
+				float interpolationFactor = (_timeValue - _frames[_index1].timestamp) / (_frames[_index2].timestamp - _frames[_index1].timestamp);
 
-				playerBikeTransform.position = Vector3.Lerp(frames[index1].pos, frames[index2].pos, interpolationFactor);
-				playerBikeTransform.rotation = Quaternion.Slerp(frames[index1].rot, frames[index2].rot, interpolationFactor);
+				_playerBikeTransform.position = Vector3.Lerp(_frames[_index1].pos, _frames[_index2].pos, interpolationFactor);
+				_playerBikeTransform.rotation = Quaternion.Slerp(_frames[_index1].rot, _frames[_index2].rot, interpolationFactor);
+			}
+		}
+
+		public void SetTransformStateClone()
+		{
+			if (_index1 == _index2)
+			{
+				_playerReplayClone.transform.position = _frames[_index1].pos;
+				_playerReplayClone.transform.rotation = _frames[_index1].rot;
+			}
+			else
+			{
+				float interpolationFactor = (_timeValue - _frames[_index1].timestamp) / (_frames[_index2].timestamp - _frames[_index1].timestamp);
+
+				_playerReplayClone.transform.position = Vector3.Lerp(_frames[_index1].pos, _frames[_index2].pos, interpolationFactor);
+				_playerReplayClone.transform.rotation = Quaternion.Slerp(_frames[_index1].rot, _frames[_index2].rot, interpolationFactor);
 			}
 		}
 
@@ -314,3 +358,7 @@ Keypad 9
 		}
 	}
 }
+
+/* REFERENCES
+ * https://videlais.com/2021/02/25/using-jsonutility-in-unity-to-save-and-load-game-data/
+ */
