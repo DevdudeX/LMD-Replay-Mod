@@ -1,14 +1,13 @@
 ﻿// Mod
 using MelonLoader;
 using ReplayMod;
+
 // Unity
 using UnityEngine;
-using UnityEngine.Rendering.PostProcessing;
+
 // Megagon
 using Il2CppMegagon.Downhill.Players;
 using Il2CppMegagon.Downhill.Vehicle.Controller;
-
-using System.IO;
 
 [assembly: MelonInfo(typeof(ReplayTool), "Replay Tool", "0.0.1", "DevdudeX")]
 [assembly: MelonGame()]
@@ -66,7 +65,6 @@ namespace ReplayMod
 
 		public override void OnSceneWasLoaded(int buildIndex, string sceneName)
 		{
-			//LoggerInstance.Msg($"Scene {sceneName} with build index {buildIndex} has been loaded!");
 			string[] blacklistedLoadScenes = {"Menu_Alps_01", "Menu_Autumn_01", "Menu_Canyon_01", "Menu_Rockies_01", "Menu_Island_01"};
 			if (Array.IndexOf(blacklistedLoadScenes, sceneName) == -1)
 			{
@@ -89,7 +87,6 @@ namespace ReplayMod
 			}
 			if (_isReplaying)
 			{
-				// TODO: disable BikeLocomotion during replay
 				Replay();
 			}
 		}
@@ -170,12 +167,12 @@ namespace ReplayMod
 			_isReplaying = true;
 
 			// Disable interfering stuff
-			CreateReplayClone();
+			CreateReplayGhost();
 
 			LoggerInstance.Msg("Replay started. Playing " + _frames.Count + " frames.");
 		}
 
-		public void CreateReplayClone()
+		public void CreateReplayGhost()
 		{
 			_playerReplayClone = GameObject.Instantiate(_playerBikeTransform.gameObject);
 			GameObject.Destroy(_playerReplayClone.GetComponent<BikeLocomotion>());
@@ -218,12 +215,12 @@ namespace ReplayMod
 
 		public void Replay()
 		{
-			if (_timeValue <= _frames[_frames.Count - 1].timestamp)
+			if (_timeValue <= _frames[^1].timestamp)
 			{
 				_timeValue += Time.unscaledDeltaTime;
 				GetIndex();
 				//SetTransformState();	// FIXME
-				SetTransformStateClone();
+				SetGhostTransformState();
 			}
 			else {
 				LoggerInstance.Msg("Replay ended.");
@@ -253,7 +250,7 @@ namespace ReplayMod
 		}
 
 		/// <summary>
-		/// Applies the position and rotation of a frame to the bike object.
+		/// Applies the position and rotation of a frame to the players bike object.
 		/// </summary>
 		public void SetTransformState()
 		{
@@ -271,7 +268,10 @@ namespace ReplayMod
 			}
 		}
 
-		public void SetTransformStateClone()
+		/// <summary>
+		/// Applies the position and rotation of a frame to the replay ghost bike.
+		/// </summary>
+		public void SetGhostTransformState()
 		{
 			if (_index1 == _index2)
 			{
@@ -292,20 +292,13 @@ namespace ReplayMod
 		{
 			float xOffset = 10;
 			float xOffset2 = 200;
-			float xOffset3 = 450;
+			//float xOffset3 = 450;
 
-						string keyboardBinds = @"<b><color=cyan><size=20>
+			string keyboardBinds = @"<b><color=cyan><size=20>
 KEYBOARD
 ------------------
 Keypad 7
 Keypad 9
-</size></color></b>";
-
-			string gamepadBinds = @"<b><color=cyan><size=20>
-| GAMEPAD
------------------------
-|
-|
 </size></color></b>";
 
 			string bindDescriptions = @"<b><color=cyan><size=20>
@@ -315,11 +308,10 @@ Keypad 9
 | Start / Stop Replay
 </size></color></b>";
 
-			GUI.Label(new Rect(xOffset, 200, 1000, 200), "<b><color=lime><size=30>Replay in progress</size></color></b>");
+			GUI.Label(new Rect(xOffset, 200, 1000, 200), "<b><color=lime><size=30>Replay Running</size></color></b>");
 
 			GUI.Label(new Rect(xOffset, 230, 2000, 2000), keyboardBinds);
-			GUI.Label(new Rect(xOffset2, 230, 2000, 2000), gamepadBinds);
-			GUI.Label(new Rect(xOffset3, 230, 2000, 2000), bindDescriptions);
+			GUI.Label(new Rect(xOffset2, 230, 2000, 2000), bindDescriptions);
 		}
 
 		public static void DrawRecordingText()

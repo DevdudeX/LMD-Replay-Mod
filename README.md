@@ -1,4 +1,4 @@
-# Replay mod for Lonely Mountains: Downhill
+# DevdudeX's Replay Tool for Lonely Mountains: Downhill
 A MelonLoader mod that aims to let you replay your movement to record at different angles.
 Very early in development so expect bugs.
 
