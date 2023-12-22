@@ -1,4 +1,6 @@
 # DevdudeX's Replay Tool for Lonely Mountains: Downhill
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/L4L5S9BK3)
+
 A MelonLoader mod that aims to let you replay your movement to record at different angles.
 Very early in development so expect bugs.
 
