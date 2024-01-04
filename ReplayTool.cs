@@ -8,6 +8,7 @@ using UnityEngine;
 // Megagon
 using Il2CppMegagon.Downhill.Players;
 using Il2CppMegagon.Downhill.Vehicle.Controller;
+using MelonLoader.TinyJSON;
 
 [assembly: MelonInfo(typeof(ReplayTool), "Replay Tool", "0.0.1", "DevdudeX")]
 [assembly: MelonGame()]
@@ -27,6 +28,10 @@ namespace ReplayMod
 		private Transform _playerBikeTransform;
 		private BikeLocomotion _bikeMoveScript;
 		private GameObject _playerReplayClone;
+
+		private GameObject _finishLine;
+		FinishLineTriggerReader _finishTriggerReader;
+		private List<GameObject> _foundCheckpoints;
 
 		private bool _isRecording;
 		private bool _isReplaying;
@@ -55,22 +60,68 @@ namespace ReplayMod
 
 			mainSettingsCat.SaveToFile();
 
-			// Get the path of the Game folder
-			string _replaySavePath = Path.GetDirectoryName(Application.dataPath) + "\\Replays";
-			//dataPath : D:\SteamLibrary\steamapps\common\Lonely Mountains - Downhill\Replays
+
 
 			// Output the Game data path to the console
-			LoggerInstance.Msg("Replay save location: " + _replaySavePath);
+			//LoggerInstance.Msg("Replay save location: " + _replaySavePath);
 		}
 
 		public override void OnSceneWasLoaded(int buildIndex, string sceneName)
 		{
-			string[] blacklistedLoadScenes = {"Menu_Alps_01", "Menu_Autumn_01", "Menu_Canyon_01", "Menu_Rockies_01", "Menu_Island_01"};
+			string[] blacklistedLoadScenes = {
+				"Menu_Alps_01",
+				"Menu_Autumn_01",
+				"Menu_Canyon_01",
+				"Menu_Rockies_01",
+				"Menu_Island_01",
+				"gameplay",
+				"DontDestroyOnLoad",
+				"HideAndDontSave"
+			};
 			if (Array.IndexOf(blacklistedLoadScenes, sceneName) == -1)
 			{
 				LoggerInstance.Msg($"Scene {sceneName} with build index {buildIndex} has been loaded!");
 				_activeSceneName = sceneName;
+
+				// Get a list of all checkpoint GO's
+				_foundCheckpoints = new List<GameObject>();
+				FindEnabledObjectsWithPartial("GameObject_Checkpoint");
+
+				// Add the TriggerReader to each checkpoint
+				for (var i = 0; i < _foundCheckpoints.Count; i++)
+				{
+					GameObject currentObject = _foundCheckpoints[i];
+					CheckpointTriggerReader _triggerScript = currentObject.AddComponent<CheckpointTriggerReader>();
+					_triggerScript.replayToolScript = this;
+				}
+
+				// Find the finish line and add the trigger
+				_finishLine = GameObject.Find("GameObject_FinishLine");
+				_finishTriggerReader = _finishLine.AddComponent<FinishLineTriggerReader>();
+				_finishTriggerReader.replayToolScript = this;
+
+				// FIXME:
+				MelonEvents.OnGUI.Subscribe(DrawInfoText, 100);
 			}
+		}
+
+		public void OnCheckpointEnter(Collider other, string checkpointName)
+		{
+			int checkpointNum;
+
+			if (checkpointName == "GameObject_Checkpoint") {
+				checkpointNum = 0;
+			}
+			else {
+				int.TryParse(checkpointName, out checkpointNum);
+			}
+
+			LoggerInstance.Msg($"OnCheckpointEnter! Name: {checkpointName}, Value: {checkpointNum}");
+		}
+
+		public void OnFinishLineEnter(Collider other)
+		{
+			LoggerInstance.Msg($"OnFinishLineEnter! Other: {other.gameObject.name}");
 		}
 
 		public override void OnUpdate()
@@ -105,13 +156,23 @@ namespace ReplayMod
 			}
 
 			// Replaying
-			if (Input.GetKeyDown(KeyCode.Keypad9))
+			if (Input.GetKeyDown(KeyCode.Keypad8))
 			{
 				if (!_isReplaying) {
 					StartReplay();
 				}
 				else {
 					StopReplay();
+				}
+			}
+
+			// Saving to file
+			if (Input.GetKeyDown(KeyCode.Keypad9))
+			{
+				if (_frames.Count > 0)
+				{
+					ReplaySegment newSegment = new ReplaySegment(_activeSceneName, 0, _frames);
+					SaveToJson(newSegment);
 				}
 			}
 		}
@@ -158,7 +219,7 @@ namespace ReplayMod
 				return;
 			}
 
-			MelonEvents.OnGUI.Subscribe(DrawInfoText, 100);
+			//MelonEvents.OnGUI.Subscribe(DrawInfoText, 100);
 
 			_timeValue = 0;
 			_index1 = 0;
@@ -215,7 +276,7 @@ namespace ReplayMod
 
 		public void Replay()
 		{
-			if (_timeValue <= _frames[^1].timestamp)
+			if (_timeValue <= _frames[^1].Timestamp)
 			{
 				_timeValue += Time.unscaledDeltaTime;
 				GetIndex();
@@ -232,13 +293,13 @@ namespace ReplayMod
 		{
 			for (int i = 0; i < _frames.Count - 2; i++)
 			{
-				if (_frames[i].timestamp == _timeValue)
+				if (_frames[i].Timestamp == _timeValue)
 				{
 					_index1 = i;
 					_index2 = i;
 					return;
 				}
-				else if (_frames[i].timestamp < _timeValue & _timeValue < _frames[i + 1].timestamp)
+				else if (_frames[i].Timestamp < _timeValue & _timeValue < _frames[i + 1].Timestamp)
 				{
 					_index1 = i;
 					_index2 = i + 1;
@@ -256,15 +317,15 @@ namespace ReplayMod
 		{
 			if (_index1 == _index2)
 			{
-				_playerBikeTransform.position = _frames[_index1].pos;
-				_playerBikeTransform.rotation = _frames[_index1].rot;
+				_playerBikeTransform.position = _frames[_index1].Pos;
+				_playerBikeTransform.rotation = _frames[_index1].Rot;
 			}
 			else
 			{
-				float interpolationFactor = (_timeValue - _frames[_index1].timestamp) / (_frames[_index2].timestamp - _frames[_index1].timestamp);
+				float interpolationFactor = (_timeValue - _frames[_index1].Timestamp) / (_frames[_index2].Timestamp - _frames[_index1].Timestamp);
 
-				_playerBikeTransform.position = Vector3.Lerp(_frames[_index1].pos, _frames[_index2].pos, interpolationFactor);
-				_playerBikeTransform.rotation = Quaternion.Slerp(_frames[_index1].rot, _frames[_index2].rot, interpolationFactor);
+				_playerBikeTransform.position = Vector3.Lerp(_frames[_index1].Pos, _frames[_index2].Pos, interpolationFactor);
+				_playerBikeTransform.rotation = Quaternion.Slerp(_frames[_index1].Rot, _frames[_index2].Rot, interpolationFactor);
 			}
 		}
 
@@ -275,16 +336,74 @@ namespace ReplayMod
 		{
 			if (_index1 == _index2)
 			{
-				_playerReplayClone.transform.position = _frames[_index1].pos;
-				_playerReplayClone.transform.rotation = _frames[_index1].rot;
+				_playerReplayClone.transform.position = _frames[_index1].Pos;
+				_playerReplayClone.transform.rotation = _frames[_index1].Rot;
 			}
 			else
 			{
-				float interpolationFactor = (_timeValue - _frames[_index1].timestamp) / (_frames[_index2].timestamp - _frames[_index1].timestamp);
+				float interpolationFactor = (_timeValue - _frames[_index1].Timestamp) / (_frames[_index2].Timestamp - _frames[_index1].Timestamp);
 
-				_playerReplayClone.transform.position = Vector3.Lerp(_frames[_index1].pos, _frames[_index2].pos, interpolationFactor);
-				_playerReplayClone.transform.rotation = Quaternion.Slerp(_frames[_index1].rot, _frames[_index2].rot, interpolationFactor);
+				_playerReplayClone.transform.position = Vector3.Lerp(_frames[_index1].Pos, _frames[_index2].Pos, interpolationFactor);
+				_playerReplayClone.transform.rotation = Quaternion.Slerp(_frames[_index1].Rot, _frames[_index2].Rot, interpolationFactor);
 			}
+		}
+
+		void FindEnabledObjectsWithPartial(string objectName)
+		{
+			GameObject[] gameObjects = GameObject.FindObjectsOfType<GameObject>();
+
+			for (var index = 0; index < gameObjects.Length; index++)
+			{
+				GameObject currentObject = gameObjects[index];
+				if (!currentObject.active) {
+					continue;
+				}
+
+				string gameObjectName = gameObjects[index].name.ToLower();
+				if (gameObjectName.Contains(objectName.ToLower()))
+				{
+					_foundCheckpoints.Add(gameObjects[index]);
+				}
+			}
+		}
+
+		private void SaveToJson(ReplaySegment segment)
+		{
+			// Get the path of the Game folder
+			//dataPath : D:\SteamLibrary\steamapps\common\Lonely Mountains - Downhill\Replays
+			string replaySaveFolder = Path.GetDirectoryName(Application.dataPath) + "\\Replays";
+			string replaySavePath = replaySaveFolder + "\\" + segment.MapName + ".json";
+
+			// List<string> frameJsonList = new();
+			// for (int i = 0; i < _frames.Count; i++)
+			// {
+			// 	Snapshot thisSnapshot = _frames[i];
+			// 	string frameAsJson = MelonLoader.TinyJSON.JSON.Dump(thisSnapshot);
+			// 	frameJsonList.Add(frameAsJson);
+			// }
+
+			string jsonReplayData = MelonLoader.TinyJSON.JSON.Dump(segment);
+			System.IO.File.WriteAllText(replaySavePath, jsonReplayData);
+		}
+
+		private void LoadFromJson(string fileName)
+		{
+			string replaySaveFolder = Path.GetDirectoryName(Application.dataPath) + "\\Replays";
+			string replaySavePath = replaySaveFolder + "\\" + fileName + ".json";
+
+			string replayAsText = System.IO.File.ReadAllText(replaySavePath);
+			var loadedSegment = MelonLoader.TinyJSON.JSON.Load(replayAsText);
+			//FIXME:
+		}
+
+
+		private string QuaternionToJson(Quaternion q)
+		{
+			return "{\"x\" : "+ q.x +", \"y\" : "+ q.y +", \"z\" : "+ q.z +", \"w\" : "+ q.w +"}";
+		}
+		private string Vector3ToJson(Vector3 vec)
+		{
+			return "{\"x\" : "+ vec.x +", \"y\" : "+ vec.y +", \"z\" : "+ vec.z +"}";
 		}
 
 
@@ -298,6 +417,7 @@ namespace ReplayMod
 KEYBOARD
 ------------------
 Keypad 7
+Keypad 8
 Keypad 9
 </size></color></b>";
 
@@ -306,6 +426,7 @@ Keypad 9
 --------------------------------
 | Start / Stop Recording
 | Start / Stop Replay
+| Save to file
 </size></color></b>";
 
 			GUI.Label(new Rect(xOffset, 200, 1000, 200), "<b><color=lime><size=30>Replay Running</size></color></b>");
@@ -333,20 +454,60 @@ Keypad 9
 		}
 	}
 
+
+	public class ReplaySegment
+	{
+		public string MapName;
+		public int SegmentNumber;
+		public List<Snapshot> Frames;
+		public List<string> FrameStrings;
+
+		public ReplaySegment(string mapName, int segmentNumber, List<Snapshot> frames)
+		{
+			MapName = mapName;
+			SegmentNumber = segmentNumber;
+			Frames = frames;
+		}
+	}
+
+	public class ReplaySegmentStringy
+	{
+		public string MapName;
+		public int SegmentNumber;
+		public List<string> FrameStrings;
+
+		public ReplaySegmentStringy(string mapName, int segmentNumber, List<string> frameStrings)
+		{
+			MapName = mapName;
+			SegmentNumber = segmentNumber;
+			FrameStrings = frameStrings;
+		}
+	}
+
 	/// <summary>
 	/// Stores the state of an object at a single point in time.
 	/// </summary>
 	public struct Snapshot
 	{
-		public float timestamp { get; private set; }
-		public Vector3 pos { get; private set; }
-		public Quaternion rot { get; private set; }
+		public float Timestamp; //{ get; private set; }
+		public Vector3 Pos; //{ get; private set; }
+		public Quaternion Rot; //{ get; private set; }
 
 		public Snapshot(float timestamp, Vector3 position, Quaternion rotation)
 		{
-			this.timestamp = timestamp;
-			this.pos = position;
-			this.rot = rotation;
+			Timestamp = timestamp;
+			Pos = position;
+			Rot = rotation;
+		}
+
+		public override string ToString()
+		{
+			//{
+			//	"Timestamp":0,
+			//	"Pos":[0, 0, 0],
+			//	"Rot":[0, 0, 0, 0]
+			//}
+			return "{\"Timestamp\":"+Timestamp+", \"Pos\":["+Pos.x+","+Pos.y+","+Pos.z+"], \"Rot\":["+Rot.x+","+Rot.y+","+Rot.z+","+Rot.w+"]}";
 		}
 	}
 }

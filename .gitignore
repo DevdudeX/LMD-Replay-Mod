@@ -400,5 +400,5 @@ FodyWeavers.xsd
 
 # EXTRA
 ./bin/
-
+ReplaySegmentTest.json
 
