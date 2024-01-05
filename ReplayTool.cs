@@ -175,9 +175,29 @@ namespace ReplayMod
 					SaveToJson(newSegment);
 				}
 			}
+
+			// Loading from file
+			if (Input.GetKeyDown(KeyCode.Keypad6))
+			{
+				GetGameObjects();
+				if (_activeSceneName != null)
+				{
+					try
+					{
+						ReplaySegment loadedSegment = LoadFromJson(_activeSceneName);
+						_frames = loadedSegment.Frames;
+						LoggerInstance.Msg($"Loading replay: {_activeSceneName}.json");
+					}
+					catch (Exception e)
+					{
+						LoggerInstance.Warning(e);
+						//throw;
+					}
+				}
+			}
 		}
 
-		public void StartRecording()
+		private void GetGameObjects()
 		{
 			if (_playerBikeTransform == null) {
 				_playerBikeTransform = GameObject.Find("Bike(Clone)").GetComponent<Transform>();
@@ -185,6 +205,11 @@ namespace ReplayMod
 			if (_bikeMoveScript == null) {
 				_bikeMoveScript = _playerBikeTransform.GetComponent<BikeLocomotion>();
 			}
+		}
+
+		public void StartRecording()
+		{
+			GetGameObjects();
 
 			if (_isRecording) StopReplay();
 
@@ -210,6 +235,8 @@ namespace ReplayMod
 
 		public void StartReplay()
 		{
+			GetGameObjects();
+
 			if (_isRecording) {
 				LoggerInstance.Msg("Error starting replay. Currently recording.");
 				return;
@@ -366,34 +393,95 @@ namespace ReplayMod
 				}
 			}
 		}
-
-		private void SaveToJson(ReplaySegment segment)
+		/// <summary>
+		/// Saves a replay segment to a json file.
+		/// </summary>
+		/// <param name="segment"></param>
+		private static void SaveToJson(ReplaySegment segment)
 		{
 			// Get the path of the Game folder
 			//dataPath : D:\SteamLibrary\steamapps\common\Lonely Mountains - Downhill\Replays
 			string replaySaveFolder = Path.GetDirectoryName(Application.dataPath) + "\\Replays";
 			string replaySavePath = replaySaveFolder + "\\" + segment.MapName + ".json";
 
-			// List<string> frameJsonList = new();
-			// for (int i = 0; i < _frames.Count; i++)
-			// {
-			// 	Snapshot thisSnapshot = _frames[i];
-			// 	string frameAsJson = MelonLoader.TinyJSON.JSON.Dump(thisSnapshot);
-			// 	frameJsonList.Add(frameAsJson);
-			// }
+			string jsonReplayData = JSON.Dump(segment, EncodeOptions.PrettyPrint);
+			File.WriteAllText(replaySavePath, jsonReplayData);
+		}
 
-			string jsonReplayData = MelonLoader.TinyJSON.JSON.Dump(segment);
+		private static ReplaySegment LoadFromJson(string fileName)
+		{
+			string replaySaveFolder = Path.GetDirectoryName(Application.dataPath) + "\\Replays";
+			string replaySavePath = replaySaveFolder + "\\" + fileName + ".json";
+
+			string replayAsText = File.ReadAllText(replaySavePath);
+			var loadedSegmentJson = JSON.Load(replayAsText);
+
+			ReplaySegment loadedSegment;
+			JSON.MakeInto(loadedSegmentJson, out loadedSegment);
+
+			return loadedSegment;
+		}
+
+		/// <summary>
+		/// Saves a replay segment to a json file.
+		/// </summary>
+		/// <param name="segment"></param>
+		private static void SaveToCompactJson(ReplaySegment segment)
+		{
+			// Get the path of the Game folder
+			//dataPath : D:\SteamLibrary\steamapps\common\Lonely Mountains - Downhill\Replays
+			string replaySaveFolder = Path.GetDirectoryName(Application.dataPath) + "\\Replays";
+			string replaySavePath = replaySaveFolder + "\\" + segment.MapName + ".json";
+
+			List<string> frameJsonList = new();
+			for (int i = 0; i < segment.Frames.Count; i++)
+			{
+				Snapshot currSnapshot = segment.Frames[i];
+				string frameAsJson = currSnapshot.ToString();
+				frameJsonList.Add(frameAsJson);
+			}
+
+			ReplaySegmentCompact compactSegment = new(segment.MapName, segment.SegmentNumber, frameJsonList);
+
+			string jsonReplayData = MelonLoader.TinyJSON.JSON.Dump(compactSegment, EncodeOptions.PrettyPrint);
 			System.IO.File.WriteAllText(replaySavePath, jsonReplayData);
 		}
 
-		private void LoadFromJson(string fileName)
+		private ReplaySegment LoadFromCompactJson(string fileName)
 		{
 			string replaySaveFolder = Path.GetDirectoryName(Application.dataPath) + "\\Replays";
 			string replaySavePath = replaySaveFolder + "\\" + fileName + ".json";
 
 			string replayAsText = System.IO.File.ReadAllText(replaySavePath);
-			var loadedSegment = MelonLoader.TinyJSON.JSON.Load(replayAsText);
-			//FIXME:
+			var loadedSegmentJson = MelonLoader.TinyJSON.JSON.Load(replayAsText);
+			var loadedFramesJson = MelonLoader.TinyJSON.JSON.Load(loadedSegmentJson["FrameStrings"]);
+
+			List<Snapshot> decompressedFrames = new();
+			bool hasMoreItems = true;
+			int framecount = 0;
+			while (hasMoreItems)
+			{
+				if (loadedFramesJson[framecount] != null)
+				{
+					//"FrameStrings":["{\"Timestamp\":0.0084685, \"Pos\":[173.56622,390.06775,153.67947], \"Rot\":[-0.04777262,0.85057044,-0.078478366,-0.517773]}",
+					var loadedFrameJson = JSON.Load(loadedFramesJson[framecount]);
+					Snapshot frame = new Snapshot(
+						loadedFrameJson["Timestamp"],
+						new Vector3(loadedFrameJson["Pos"][0], loadedFrameJson["Pos"][1], loadedFrameJson["Pos"][2]),
+						new Quaternion(loadedFrameJson["Rot"][0], loadedFrameJson["Rot"][1], loadedFrameJson["Rot"][2], loadedFrameJson["Rot"][3])
+					);
+
+					decompressedFrames.Add(frame);
+				}
+				else {
+					hasMoreItems = false;
+				}
+
+				framecount++;
+			}
+
+			ReplaySegment loadedSegment = new ReplaySegment(loadedSegmentJson["MapName"], loadedSegmentJson["SegmentNumber"], decompressedFrames);
+			return loadedSegment;
 		}
 
 
@@ -419,6 +507,7 @@ KEYBOARD
 Keypad 7
 Keypad 8
 Keypad 9
+Keypad 6
 </size></color></b>";
 
 			string bindDescriptions = @"<b><color=cyan><size=20>
@@ -427,6 +516,7 @@ Keypad 9
 | Start / Stop Recording
 | Start / Stop Replay
 | Save to file
+| Load from file
 </size></color></b>";
 
 			GUI.Label(new Rect(xOffset, 200, 1000, 200), "<b><color=lime><size=30>Replay Running</size></color></b>");
@@ -437,7 +527,7 @@ Keypad 9
 
 		public static void DrawRecordingText()
 		{
-			GUI.Label(new Rect(10, 200, 1000, 200), "<b><color=lime><size=30>Recording</size></color></b>");
+			GUI.Label(new Rect(10, 185, 1000, 200), "<b><color=lime><size=30>Recording</size></color></b>");
 		}
 
 		public static void DrawVersionText()
@@ -460,7 +550,8 @@ Keypad 9
 		public string MapName;
 		public int SegmentNumber;
 		public List<Snapshot> Frames;
-		public List<string> FrameStrings;
+
+		public ReplaySegment(){}
 
 		public ReplaySegment(string mapName, int segmentNumber, List<Snapshot> frames)
 		{
@@ -470,13 +561,13 @@ Keypad 9
 		}
 	}
 
-	public class ReplaySegmentStringy
+	public class ReplaySegmentCompact
 	{
 		public string MapName;
 		public int SegmentNumber;
 		public List<string> FrameStrings;
 
-		public ReplaySegmentStringy(string mapName, int segmentNumber, List<string> frameStrings)
+		public ReplaySegmentCompact(string mapName, int segmentNumber, List<string> frameStrings)
 		{
 			MapName = mapName;
 			SegmentNumber = segmentNumber;
@@ -499,7 +590,9 @@ Keypad 9
 			Pos = position;
 			Rot = rotation;
 		}
-
+		/// <summary>
+		/// Returns the Snapshot as a compact JSON string.
+		/// </summary>
 		public override string ToString()
 		{
 			//{
