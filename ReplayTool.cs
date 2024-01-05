@@ -186,7 +186,7 @@ namespace ReplayMod
 					{
 						ReplaySegment loadedSegment = LoadFromJson(_activeSceneName);
 						_frames = loadedSegment.Frames;
-						LoggerInstance.Msg($"Loading replay: {_activeSceneName}.json");
+						LoggerInstance.Msg($"Replay loaded: '{_activeSceneName}.json' with {_frames.Count} frames!");
 					}
 					catch (Exception e)
 					{
@@ -532,7 +532,7 @@ Keypad 6
 
 		public static void DrawVersionText()
 		{
-			GUI.Label(new Rect(20, 8, 1000, 200), "<b><color=white><size=15>Replay Tool v"+ MOD_VERSION +"</size></color></b>");
+			GUI.Label(new Rect(20, 12, 1000, 200), "<b><color=white><size=15>Replay Tool v"+ MOD_VERSION +"</size></color></b>");
 		}
 		public override void OnDeinitializeMelon()
 		{
