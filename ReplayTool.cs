@@ -23,6 +23,8 @@ namespace ReplayMod
 
 		private MelonPreferences_Category mainSettingsCat;
 		private MelonPreferences_Entry<int> cfg_recordFrequency;
+		private MelonPreferences_Entry<bool> cfg_autoStart;
+		private MelonPreferences_Entry<bool> cfg_autoSave;
 
 		// Object References
 		private Transform _playerBikeTransform;
@@ -56,7 +58,9 @@ namespace ReplayMod
 			mainSettingsCat.SetFilePath("UserData/ReplayToolSettings.cfg");
 
 			// Main Settings
-			cfg_recordFrequency = mainSettingsCat.CreateEntry<int>("RecordingFrequency", 45);
+			cfg_recordFrequency = mainSettingsCat.CreateEntry<int>("RecordingFrequency", 30);
+			cfg_autoStart = mainSettingsCat.CreateEntry<bool>("StartRecordingOnLevelLoad", false);
+			cfg_autoSave = mainSettingsCat.CreateEntry<bool>("AutoSaveOnTrackFinish", false);
 
 			mainSettingsCat.SaveToFile();
 
@@ -69,14 +73,8 @@ namespace ReplayMod
 		public override void OnSceneWasLoaded(int buildIndex, string sceneName)
 		{
 			string[] blacklistedLoadScenes = {
-				"Menu_Alps_01",
-				"Menu_Autumn_01",
-				"Menu_Canyon_01",
-				"Menu_Rockies_01",
-				"Menu_Island_01",
-				"gameplay",
-				"DontDestroyOnLoad",
-				"HideAndDontSave"
+				"Menu_Alps_01", "Menu_Autumn_01", "Menu_Canyon_01", "Menu_Rockies_01", "Menu_Island_01",
+				"gameplay", "DontDestroyOnLoad", "HideAndDontSave"
 			};
 			if (Array.IndexOf(blacklistedLoadScenes, sceneName) == -1)
 			{
@@ -91,8 +89,11 @@ namespace ReplayMod
 				for (var i = 0; i < _foundCheckpoints.Count; i++)
 				{
 					GameObject currentObject = _foundCheckpoints[i];
-					CheckpointTriggerReader _triggerScript = currentObject.AddComponent<CheckpointTriggerReader>();
-					_triggerScript.replayToolScript = this;
+					if (currentObject.active)
+					{
+						CheckpointTriggerReader _triggerScript = currentObject.AddComponent<CheckpointTriggerReader>();
+						_triggerScript.replayToolScript = this;
+					}
 				}
 
 				// Find the finish line and add the trigger
@@ -101,7 +102,12 @@ namespace ReplayMod
 				_finishTriggerReader.replayToolScript = this;
 
 				// FIXME:
-				MelonEvents.OnGUI.Subscribe(DrawInfoText, 100);
+				//MelonEvents.OnGUI.Subscribe(DrawInfoText, 100);
+
+
+				if (cfg_autoStart.Value && !_isRecording) {
+					StartRecording();
+				}
 			}
 		}
 
@@ -122,6 +128,12 @@ namespace ReplayMod
 		public void OnFinishLineEnter(Collider other)
 		{
 			LoggerInstance.Msg($"OnFinishLineEnter! Other: {other.gameObject.name}");
+
+			if (cfg_autoSave.Value && _isRecording)
+			{
+				StopRecording();
+				SaveReplay();
+			}
 		}
 
 		public override void OnUpdate()
@@ -145,7 +157,7 @@ namespace ReplayMod
 		public void HandleInputs()
 		{
 			// Recording
-			if (Input.GetKeyDown(KeyCode.Keypad7))
+			if (Input.GetKey(KeyCode.R) && Input.GetKeyDown(KeyCode.Keypad7))
 			{
 				if (!_isRecording) {
 					StartRecording();
@@ -156,7 +168,7 @@ namespace ReplayMod
 			}
 
 			// Replaying
-			if (Input.GetKeyDown(KeyCode.Keypad8))
+			if (Input.GetKey(KeyCode.R) && Input.GetKeyDown(KeyCode.Keypad8))
 			{
 				if (!_isReplaying) {
 					StartReplay();
@@ -167,32 +179,51 @@ namespace ReplayMod
 			}
 
 			// Saving to file
-			if (Input.GetKeyDown(KeyCode.Keypad9))
+			if (Input.GetKey(KeyCode.R) && Input.GetKeyDown(KeyCode.Keypad9))
 			{
-				if (_frames.Count > 0)
-				{
-					ReplaySegment newSegment = new ReplaySegment(_activeSceneName, 0, _frames);
-					SaveToJson(newSegment);
-				}
+				SaveReplay();
 			}
 
 			// Loading from file
-			if (Input.GetKeyDown(KeyCode.Keypad6))
+			if (Input.GetKey(KeyCode.R) && Input.GetKeyDown(KeyCode.Keypad6))
 			{
-				GetGameObjects();
-				if (_activeSceneName != null)
+				LoadAndPlayReplay();
+			}
+		}
+
+		private void SaveReplay()
+		{
+			if (_frames.Count > 0)
+			{
+				ReplaySegment newSegment = new ReplaySegment(_activeSceneName, 0, _frames);
+				SaveToJson(newSegment);
+				LoggerInstance.Msg($"Replay saved to 'Replays/{_activeSceneName}.json' with {_frames.Count} frames!");
+			}
+		}
+
+		private void LoadAndPlayReplay()
+		{
+			GetGameObjects();
+			if (_activeSceneName != null)
+			{
+				try
 				{
-					try
-					{
-						ReplaySegment loadedSegment = LoadFromJson(_activeSceneName);
-						_frames = loadedSegment.Frames;
-						LoggerInstance.Msg($"Replay loaded: '{_activeSceneName}.json' with {_frames.Count} frames!");
-					}
-					catch (Exception e)
-					{
-						LoggerInstance.Warning(e);
-						//throw;
-					}
+					ReplaySegment loadedSegment = LoadFromJson(_activeSceneName);
+					_frames = loadedSegment.Frames;
+					LoggerInstance.Msg($"Replay loaded: '{_activeSceneName}.json' with {_frames.Count} frames!");
+				}
+				catch (Exception e)
+				{
+					LoggerInstance.Warning(e);
+					//throw;
+				}
+
+				if (!_isReplaying) {
+					StartReplay();
+				}
+				else {
+					StopReplay();
+					StartReplay();
 				}
 			}
 		}
@@ -246,7 +277,7 @@ namespace ReplayMod
 				return;
 			}
 
-			//MelonEvents.OnGUI.Subscribe(DrawInfoText, 100);
+			MelonEvents.OnGUI.Subscribe(DrawInfoText, 100);
 
 			_timeValue = 0;
 			_index1 = 0;
@@ -404,7 +435,7 @@ namespace ReplayMod
 			string replaySaveFolder = Path.GetDirectoryName(Application.dataPath) + "\\Replays";
 			string replaySavePath = replaySaveFolder + "\\" + segment.MapName + ".json";
 
-			string jsonReplayData = JSON.Dump(segment, EncodeOptions.PrettyPrint);
+			string jsonReplayData = JSON.Dump(segment);
 			File.WriteAllText(replaySavePath, jsonReplayData);
 		}
 
@@ -443,8 +474,8 @@ namespace ReplayMod
 
 			ReplaySegmentCompact compactSegment = new(segment.MapName, segment.SegmentNumber, frameJsonList);
 
-			string jsonReplayData = MelonLoader.TinyJSON.JSON.Dump(compactSegment, EncodeOptions.PrettyPrint);
-			System.IO.File.WriteAllText(replaySavePath, jsonReplayData);
+			string jsonReplayData = JSON.Dump(compactSegment, EncodeOptions.PrettyPrint);
+			File.WriteAllText(replaySavePath, jsonReplayData);
 		}
 
 		private ReplaySegment LoadFromCompactJson(string fileName)
@@ -532,7 +563,7 @@ Keypad 6
 
 		public static void DrawVersionText()
 		{
-			GUI.Label(new Rect(20, 12, 1000, 200), "<b><color=white><size=15>Replay Tool v"+ MOD_VERSION +"</size></color></b>");
+			GUI.Label(new Rect(20, 20, 1000, 200), "<b><color=white><size=15>Replay Tool v"+ MOD_VERSION +"</size></color></b>");
 		}
 		public override void OnDeinitializeMelon()
 		{

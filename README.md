@@ -31,9 +31,10 @@ This file can be opened with any text editor and contains all the mods settings.
 #### Keybinds
 | Keyboard & Mouse      | Gamepad      | Action                               |
 | ---                   | ---          | ---                                  |
-| Keypad 7              |              | Start / Stop Recording               |
-| Keypad 8              |              | Start / Stop Replay                  |
-| Keypad 9              |              | Save to JSON                         |
+| R + Keypad 7          |              | Start / Stop Recording               |
+| R + Keypad 8          |              | Start / Stop Replay                  |
+| R + Keypad 9          |              | Save to JSON                         |
+| R + Keypad 6          |              | Load from JSON                       |
 
 
 #### Known Issues & Fixes
