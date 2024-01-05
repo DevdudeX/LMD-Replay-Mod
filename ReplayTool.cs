@@ -24,6 +24,7 @@ namespace ReplayMod
 		private MelonPreferences_Category mainSettingsCat;
 		private MelonPreferences_Entry<int> cfg_recordFrequency;
 		private MelonPreferences_Entry<bool> cfg_autoStart;
+		private MelonPreferences_Entry<bool> cfg_autoStop;
 		private MelonPreferences_Entry<bool> cfg_autoSave;
 
 		// Object References
@@ -60,6 +61,7 @@ namespace ReplayMod
 			// Main Settings
 			cfg_recordFrequency = mainSettingsCat.CreateEntry<int>("RecordingFrequency", 30);
 			cfg_autoStart = mainSettingsCat.CreateEntry<bool>("StartRecordingOnLevelLoad", false);
+			cfg_autoStop = mainSettingsCat.CreateEntry<bool>("StopRecordingOnTrackFinish", false);
 			cfg_autoSave = mainSettingsCat.CreateEntry<bool>("AutoSaveOnTrackFinish", false);
 
 			mainSettingsCat.SaveToFile();
@@ -129,9 +131,12 @@ namespace ReplayMod
 		{
 			LoggerInstance.Msg($"OnFinishLineEnter! Other: {other.gameObject.name}");
 
-			if (cfg_autoSave.Value && _isRecording)
+			if ((cfg_autoStop.Value || cfg_autoSave.Value) && _isRecording)
 			{
 				StopRecording();
+			}
+			if (cfg_autoSave.Value)
+			{
 				SaveReplay();
 			}
 		}
