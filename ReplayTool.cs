@@ -1,6 +1,7 @@
 ﻿// Mod
-using MelonLoader;
 using ReplayMod;
+using MelonLoader;
+using MelonLoader.TinyJSON;
 
 // Unity
 using UnityEngine;
@@ -8,7 +9,7 @@ using UnityEngine;
 // Megagon
 using Il2CppMegagon.Downhill.Players;
 using Il2CppMegagon.Downhill.Vehicle.Controller;
-using MelonLoader.TinyJSON;
+
 
 [assembly: MelonInfo(typeof(ReplayTool), "Replay Tool", "0.0.1", "DevdudeX")]
 [assembly: MelonGame()]
@@ -30,6 +31,8 @@ namespace ReplayMod
 		// Object References
 		private Transform _playerBikeTransform;
 		private BikeLocomotion _bikeMoveScript;
+		private Animator _bikeAnimator;
+
 		private GameObject _playerReplayClone;
 
 		private GameObject _finishLine;
@@ -201,7 +204,7 @@ namespace ReplayMod
 			if (_frames.Count > 0)
 			{
 				ReplaySegment newSegment = new ReplaySegment(_activeSceneName, 0, _frames);
-				SaveToJson(newSegment);
+				SaveToCompactJson(newSegment);
 				LoggerInstance.Msg($"Replay saved to 'Replays/{_activeSceneName}.json' with {_frames.Count} frames!");
 			}
 		}
@@ -213,7 +216,7 @@ namespace ReplayMod
 			{
 				try
 				{
-					ReplaySegment loadedSegment = LoadFromJson(_activeSceneName);
+					ReplaySegment loadedSegment = LoadFromCompactJson(_activeSceneName);
 					_frames = loadedSegment.Frames;
 					LoggerInstance.Msg($"Replay loaded: '{_activeSceneName}.json' with {_frames.Count} frames!");
 				}
@@ -326,11 +329,17 @@ namespace ReplayMod
 
 			if (_timer >= 1 / cfg_recordFrequency.Value)
 			{
+
+				//_bikeAnimator
+
 				Snapshot newFrame = new Snapshot(
 					_timeValue,
 					_playerBikeTransform.position,
 					_playerBikeTransform.rotation
 				);
+
+
+
 
 				_frames.Add(newFrame);
 				_timer = 0;
@@ -411,7 +420,9 @@ namespace ReplayMod
 			}
 		}
 
-		void FindEnabledObjectsWithPartial(string objectName)
+
+
+		private void FindEnabledObjectsWithPartial(string objectName)
 		{
 			GameObject[] gameObjects = GameObject.FindObjectsOfType<GameObject>();
 
@@ -459,15 +470,14 @@ namespace ReplayMod
 		}
 
 		/// <summary>
-		/// Saves a replay segment to a json file.
+		/// Saves a replay segment to a compacted json file.
 		/// </summary>
 		/// <param name="segment"></param>
 		private static void SaveToCompactJson(ReplaySegment segment)
 		{
 			// Get the path of the Game folder
-			//dataPath : D:\SteamLibrary\steamapps\common\Lonely Mountains - Downhill\Replays
 			string replaySaveFolder = Path.GetDirectoryName(Application.dataPath) + "\\Replays";
-			string replaySavePath = replaySaveFolder + "\\" + segment.MapName + ".json";
+			string replaySavePath = replaySaveFolder + "\\" + segment.MapName + "_compact.json";
 
 			List<string> frameJsonList = new();
 			for (int i = 0; i < segment.Frames.Count; i++)
@@ -483,37 +493,35 @@ namespace ReplayMod
 			File.WriteAllText(replaySavePath, jsonReplayData);
 		}
 
+		/// <summary>
+		/// Loads a compacted json replay file and returns it as a ReplaySegment object.
+		/// </summary>
 		private ReplaySegment LoadFromCompactJson(string fileName)
 		{
 			string replaySaveFolder = Path.GetDirectoryName(Application.dataPath) + "\\Replays";
-			string replaySavePath = replaySaveFolder + "\\" + fileName + ".json";
+			string replaySavePath = replaySaveFolder + "\\" + fileName + "_compact.json";
 
-			string replayAsText = System.IO.File.ReadAllText(replaySavePath);
-			var loadedSegmentJson = MelonLoader.TinyJSON.JSON.Load(replayAsText);
-			var loadedFramesJson = MelonLoader.TinyJSON.JSON.Load(loadedSegmentJson["FrameStrings"]);
+			string replayAsText = File.ReadAllText(replaySavePath);
+			var loadedSegmentJson = JSON.Load(replayAsText);
 
 			List<Snapshot> decompressedFrames = new();
+
+			// Extremely janky method to iterate through the json array
 			bool hasMoreItems = true;
-			int framecount = 0;
+			int frameIndex = 0;
 			while (hasMoreItems)
 			{
-				if (loadedFramesJson[framecount] != null)
-				{
-					//"FrameStrings":["{\"Timestamp\":0.0084685, \"Pos\":[173.56622,390.06775,153.67947], \"Rot\":[-0.04777262,0.85057044,-0.078478366,-0.517773]}",
-					var loadedFrameJson = JSON.Load(loadedFramesJson[framecount]);
-					Snapshot frame = new Snapshot(
-						loadedFrameJson["Timestamp"],
-						new Vector3(loadedFrameJson["Pos"][0], loadedFrameJson["Pos"][1], loadedFrameJson["Pos"][2]),
-						new Quaternion(loadedFrameJson["Rot"][0], loadedFrameJson["Rot"][1], loadedFrameJson["Rot"][2], loadedFrameJson["Rot"][3])
-					);
-
-					decompressedFrames.Add(frame);
+				try {
+					hasMoreItems = loadedSegmentJson["FrameStrings"][frameIndex] != null;
 				}
-				else {
-					hasMoreItems = false;
+				catch (System.Exception) {
+					break;
 				}
 
-				framecount++;
+				//{\"Timestamp\":0.0084685, \"Pos\":[173.56622,390.06775,153.67947], \"Rot\":[-0.04777262,0.85057044,-0.078478366,-0.517773]}
+				Snapshot frame = new Snapshot(loadedSegmentJson["FrameStrings"][frameIndex]);
+				decompressedFrames.Add(frame);
+				frameIndex++;
 			}
 
 			ReplaySegment loadedSegment = new ReplaySegment(loadedSegmentJson["MapName"], loadedSegmentJson["SegmentNumber"], decompressedFrames);
@@ -583,6 +591,7 @@ Keypad 6
 
 	public class ReplaySegment
 	{
+		public string formatVersion = "0";
 		public string MapName;
 		public int SegmentNumber;
 		public List<Snapshot> Frames;
@@ -626,18 +635,42 @@ Keypad 6
 			Pos = position;
 			Rot = rotation;
 		}
+
+		/// <summary>
+		/// Creates a snapshot object from a compressed snapshot json string.
+		/// </summary>
+		public Snapshot(string compressedJson)
+		{
+			var loadedJson = JSON.Load(compressedJson);
+			Timestamp = loadedJson["Timestamp"];
+			Pos = new Vector3(loadedJson["Pos"][0], loadedJson["Pos"][1], loadedJson["Pos"][2]);
+			Rot = new Quaternion(loadedJson["Rot"][0], loadedJson["Rot"][1], loadedJson["Rot"][2], loadedJson["Rot"][3]);
+		}
+
+
 		/// <summary>
 		/// Returns the Snapshot as a compact JSON string.
 		/// </summary>
 		public override string ToString()
 		{
-			//{
-			//	"Timestamp":0,
-			//	"Pos":[0, 0, 0],
-			//	"Rot":[0, 0, 0, 0]
-			//}
+			//{"Timestamp":0, "Pos":[0, 0, 0], "Rot":[0, 0, 0, 0]}
 			return "{\"Timestamp\":"+Timestamp+", \"Pos\":["+Pos.x+","+Pos.y+","+Pos.z+"], \"Rot\":["+Rot.x+","+Rot.y+","+Rot.z+","+Rot.w+"]}";
+
+			//Timestamp|Pos|Rot
+			//"0|0,0,0|0,0,0,0"
+			//return $"{Timestamp}|{Pos.x},{Pos.y},{Pos.z}|{Rot.x},{Rot.y},{Rot.z},{Rot.w},";
 		}
+	}
+
+	/// <summary>
+	/// The type of replay.
+	/// Ghost spawns a new player.
+	/// PlayerControl makes the actual player move.
+	/// </summary>
+	public enum ReplayMode
+	{
+		Ghost,
+		PlayerControl
 	}
 }
 

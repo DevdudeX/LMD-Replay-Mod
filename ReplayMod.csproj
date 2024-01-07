@@ -31,6 +31,12 @@
     <Reference Include="UnityEngine">
       <HintPath>..\..\SteamLibrary\steamapps\common\Lonely Mountains - Downhill\MelonLoader\Il2CppAssemblies\UnityEngine.dll</HintPath>
     </Reference>
+    <Reference Include="UnityEngine.AnimationModule">
+      <HintPath>..\..\SteamLibrary\steamapps\common\Lonely Mountains - Downhill\MelonLoader\Il2CppAssemblies\UnityEngine.AnimationModule.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.AssetBundleModule">
+      <HintPath>..\..\SteamLibrary\steamapps\common\Lonely Mountains - Downhill\MelonLoader\Il2CppAssemblies\UnityEngine.AssetBundleModule.dll</HintPath>
+    </Reference>
     <Reference Include="UnityEngine.CoreModule">
       <HintPath>..\..\SteamLibrary\steamapps\common\Lonely Mountains - Downhill\MelonLoader\Il2CppAssemblies\UnityEngine.CoreModule.dll</HintPath>
     </Reference>
