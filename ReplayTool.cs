@@ -11,14 +11,15 @@ using Il2CppMegagon.Downhill.Players;
 using Il2CppMegagon.Downhill.Vehicle.Controller;
 
 
-[assembly: MelonInfo(typeof(ReplayTool), "Replay Tool", "0.0.1", "DevdudeX")]
+[assembly: MelonInfo(typeof(ReplayTool), "Replay Tool", "0.0.4", "DevdudeX")]
 [assembly: MelonGame()]
 namespace ReplayMod
 {
 	public class ReplayTool : MelonMod
 	{
 		// Keep this updated!
-		private const string MOD_VERSION = "0.0.1";
+		private const string MOD_VERSION = "0.0.4";
+		private const string FORMAT_VERSION = "0.0.0";	// Bump this for format changes
 		public static ReplayTool instance;
 		private static bool forceDisable = false;
 
@@ -195,7 +196,7 @@ namespace ReplayMod
 		{
 			if (_frames.Count > 0)
 			{
-				ReplaySegment newSegment = new ReplaySegment(_activeSceneName, 0, _frames);
+				ReplaySegment newSegment = new ReplaySegment(FORMAT_VERSION, _activeSceneName, 0, _frames);
 				SaveToJson(newSegment);
 				LoggerInstance.Msg($"Replay saved to 'Replays/{_activeSceneName}.json' with {_frames.Count} frames!");
 			}
@@ -452,7 +453,7 @@ namespace ReplayMod
 				frameJsonList.Add(frameAsJson);
 			}
 
-			ReplaySegmentCompact compactSegment = new(segment.MapName, segment.SegmentNumber, frameJsonList);
+			ReplaySegmentCompact compactSegment = new(FORMAT_VERSION, segment.MapName, segment.SegmentNumber, frameJsonList);
 
 			string jsonReplayData = JSON.Dump(compactSegment);	//, EncodeOptions.PrettyPrint
 			File.WriteAllText(replaySavePath, jsonReplayData);
@@ -488,7 +489,7 @@ namespace ReplayMod
 				frameIndex++;
 			}
 
-			ReplaySegment loadedSegment = new ReplaySegment(loadedSegmentJson["MapName"], loadedSegmentJson["SegmentNumber"], decompressedFrames);
+			ReplaySegment loadedSegment = new ReplaySegment(FORMAT_VERSION, loadedSegmentJson["MapName"], loadedSegmentJson["SegmentNumber"], decompressedFrames);
 			return loadedSegment;
 		}
 
@@ -544,14 +545,15 @@ Keypad 6
 
 	public class ReplaySegment
 	{
-		public string ReplayVersion = "0";
+		public string FormatVersion;
 		public string MapName;
 		public int SegmentNumber;
 		public List<Snapshot> Frames;
 
 		public ReplaySegment(){}
-		public ReplaySegment(string mapName, int segmentNumber, List<Snapshot> frames)
+		public ReplaySegment(string formatVersion, string mapName, int segmentNumber, List<Snapshot> frames)
 		{
+			FormatVersion = formatVersion;
 			MapName = mapName;
 			SegmentNumber = segmentNumber;
 			Frames = frames;
@@ -560,13 +562,14 @@ Keypad 6
 
 	public class ReplaySegmentCompact
 	{
-		public string ReplayVersion = "0";
+		public string FormatVersion;
 		public string MapName;
 		public int SegmentNumber;
 		public List<string> FrameStrings;
 
-		public ReplaySegmentCompact(string mapName, int segmentNumber, List<string> frameStrings)
+		public ReplaySegmentCompact(string formatVersion, string mapName, int segmentNumber, List<string> frameStrings)
 		{
+			FormatVersion = formatVersion;
 			MapName = mapName;
 			SegmentNumber = segmentNumber;
 			FrameStrings = frameStrings;
