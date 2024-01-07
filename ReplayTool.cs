@@ -31,8 +31,6 @@ namespace ReplayMod
 		// Object References
 		private Transform _playerBikeTransform;
 		private BikeLocomotion _bikeMoveScript;
-		private Animator _bikeAnimator;
-
 		private GameObject _playerReplayClone;
 
 		private GameObject _finishLine;
@@ -48,7 +46,7 @@ namespace ReplayMod
 		private List<Snapshot> _frames;
 
 		private string _activeSceneName;
-		private string _replaySavePath;
+		private ReplayMode _replayMode = ReplayMode.Ghost;
 
 		public override void OnEarlyInitializeMelon()
 		{
@@ -68,11 +66,6 @@ namespace ReplayMod
 			cfg_autoSave = mainSettingsCat.CreateEntry<bool>("AutoSaveOnTrackFinish", false);
 
 			mainSettingsCat.SaveToFile();
-
-
-
-			// Output the Game data path to the console
-			//LoggerInstance.Msg("Replay save location: " + _replaySavePath);
 		}
 
 		public override void OnSceneWasLoaded(int buildIndex, string sceneName)
@@ -109,7 +102,6 @@ namespace ReplayMod
 				// FIXME:
 				//MelonEvents.OnGUI.Subscribe(DrawInfoText, 100);
 
-
 				if (cfg_autoStart.Value && !_isRecording) {
 					StartRecording();
 				}
@@ -124,7 +116,7 @@ namespace ReplayMod
 				checkpointNum = 0;
 			}
 			else {
-				int.TryParse(checkpointName, out checkpointNum);
+				checkpointNum = int.Parse(checkpointName);
 			}
 
 			LoggerInstance.Msg($"OnCheckpointEnter! Name: {checkpointName}, Value: {checkpointNum}");
@@ -204,7 +196,7 @@ namespace ReplayMod
 			if (_frames.Count > 0)
 			{
 				ReplaySegment newSegment = new ReplaySegment(_activeSceneName, 0, _frames);
-				SaveToCompactJson(newSegment);
+				SaveToJson(newSegment);
 				LoggerInstance.Msg($"Replay saved to 'Replays/{_activeSceneName}.json' with {_frames.Count} frames!");
 			}
 		}
@@ -216,7 +208,7 @@ namespace ReplayMod
 			{
 				try
 				{
-					ReplaySegment loadedSegment = LoadFromCompactJson(_activeSceneName);
+					ReplaySegment loadedSegment = LoadFromJson(_activeSceneName);
 					_frames = loadedSegment.Frames;
 					LoggerInstance.Msg($"Replay loaded: '{_activeSceneName}.json' with {_frames.Count} frames!");
 				}
@@ -250,7 +242,9 @@ namespace ReplayMod
 		{
 			GetGameObjects();
 
-			if (_isRecording) StopReplay();
+			if (_isRecording) {
+				StopReplay();
+			}
 
 			_frames = new List<Snapshot>();
 			_timeValue = 0;
@@ -329,17 +323,11 @@ namespace ReplayMod
 
 			if (_timer >= 1 / cfg_recordFrequency.Value)
 			{
-
-				//_bikeAnimator
-
 				Snapshot newFrame = new Snapshot(
 					_timeValue,
 					_playerBikeTransform.position,
 					_playerBikeTransform.rotation
 				);
-
-
-
 
 				_frames.Add(newFrame);
 				_timer = 0;
@@ -352,8 +340,16 @@ namespace ReplayMod
 			{
 				_timeValue += Time.unscaledDeltaTime;
 				GetIndex();
-				//SetTransformState();	// FIXME
-				SetGhostTransformState();
+
+				if (_replayMode == ReplayMode.Ghost)
+				{
+					SetGhostTransformState();
+				}
+				else if (_replayMode == ReplayMode.PlayerControl)
+				{
+					// FIXME:
+					SetTransformState();
+				}
 			}
 			else {
 				LoggerInstance.Msg("Replay ended.");
@@ -420,8 +416,6 @@ namespace ReplayMod
 			}
 		}
 
-
-
 		private void FindEnabledObjectsWithPartial(string objectName)
 		{
 			GameObject[] gameObjects = GameObject.FindObjectsOfType<GameObject>();
@@ -440,44 +434,15 @@ namespace ReplayMod
 				}
 			}
 		}
-		/// <summary>
-		/// Saves a replay segment to a json file.
-		/// </summary>
-		/// <param name="segment"></param>
-		private static void SaveToJson(ReplaySegment segment)
-		{
-			// Get the path of the Game folder
-			//dataPath : D:\SteamLibrary\steamapps\common\Lonely Mountains - Downhill\Replays
-			string replaySaveFolder = Path.GetDirectoryName(Application.dataPath) + "\\Replays";
-			string replaySavePath = replaySaveFolder + "\\" + segment.MapName + ".json";
-
-			string jsonReplayData = JSON.Dump(segment);
-			File.WriteAllText(replaySavePath, jsonReplayData);
-		}
-
-		private static ReplaySegment LoadFromJson(string fileName)
-		{
-			string replaySaveFolder = Path.GetDirectoryName(Application.dataPath) + "\\Replays";
-			string replaySavePath = replaySaveFolder + "\\" + fileName + ".json";
-
-			string replayAsText = File.ReadAllText(replaySavePath);
-			var loadedSegmentJson = JSON.Load(replayAsText);
-
-			ReplaySegment loadedSegment;
-			JSON.MakeInto(loadedSegmentJson, out loadedSegment);
-
-			return loadedSegment;
-		}
 
 		/// <summary>
 		/// Saves a replay segment to a compacted json file.
 		/// </summary>
-		/// <param name="segment"></param>
-		private static void SaveToCompactJson(ReplaySegment segment)
+		private static void SaveToJson(ReplaySegment segment)
 		{
 			// Get the path of the Game folder
 			string replaySaveFolder = Path.GetDirectoryName(Application.dataPath) + "\\Replays";
-			string replaySavePath = replaySaveFolder + "\\" + segment.MapName + "_compact.json";
+			string replaySavePath = replaySaveFolder + "\\" + segment.MapName + ".json";
 
 			List<string> frameJsonList = new();
 			for (int i = 0; i < segment.Frames.Count; i++)
@@ -489,17 +454,17 @@ namespace ReplayMod
 
 			ReplaySegmentCompact compactSegment = new(segment.MapName, segment.SegmentNumber, frameJsonList);
 
-			string jsonReplayData = JSON.Dump(compactSegment, EncodeOptions.PrettyPrint);
+			string jsonReplayData = JSON.Dump(compactSegment);	//, EncodeOptions.PrettyPrint
 			File.WriteAllText(replaySavePath, jsonReplayData);
 		}
 
 		/// <summary>
 		/// Loads a compacted json replay file and returns it as a ReplaySegment object.
 		/// </summary>
-		private ReplaySegment LoadFromCompactJson(string fileName)
+		private static ReplaySegment LoadFromJson(string fileName)
 		{
 			string replaySaveFolder = Path.GetDirectoryName(Application.dataPath) + "\\Replays";
-			string replaySavePath = replaySaveFolder + "\\" + fileName + "_compact.json";
+			string replaySavePath = replaySaveFolder + "\\" + fileName + ".json";
 
 			string replayAsText = File.ReadAllText(replaySavePath);
 			var loadedSegmentJson = JSON.Load(replayAsText);
@@ -518,7 +483,6 @@ namespace ReplayMod
 					break;
 				}
 
-				//{\"Timestamp\":0.0084685, \"Pos\":[173.56622,390.06775,153.67947], \"Rot\":[-0.04777262,0.85057044,-0.078478366,-0.517773]}
 				Snapshot frame = new Snapshot(loadedSegmentJson["FrameStrings"][frameIndex]);
 				decompressedFrames.Add(frame);
 				frameIndex++;
@@ -527,17 +491,6 @@ namespace ReplayMod
 			ReplaySegment loadedSegment = new ReplaySegment(loadedSegmentJson["MapName"], loadedSegmentJson["SegmentNumber"], decompressedFrames);
 			return loadedSegment;
 		}
-
-
-		private string QuaternionToJson(Quaternion q)
-		{
-			return "{\"x\" : "+ q.x +", \"y\" : "+ q.y +", \"z\" : "+ q.z +", \"w\" : "+ q.w +"}";
-		}
-		private string Vector3ToJson(Vector3 vec)
-		{
-			return "{\"x\" : "+ vec.x +", \"y\" : "+ vec.y +", \"z\" : "+ vec.z +"}";
-		}
-
 
 		public void DrawInfoText()
 		{
@@ -591,13 +544,12 @@ Keypad 6
 
 	public class ReplaySegment
 	{
-		public string formatVersion = "0";
+		public string ReplayVersion = "0";
 		public string MapName;
 		public int SegmentNumber;
 		public List<Snapshot> Frames;
 
 		public ReplaySegment(){}
-
 		public ReplaySegment(string mapName, int segmentNumber, List<Snapshot> frames)
 		{
 			MapName = mapName;
@@ -608,6 +560,7 @@ Keypad 6
 
 	public class ReplaySegmentCompact
 	{
+		public string ReplayVersion = "0";
 		public string MapName;
 		public int SegmentNumber;
 		public List<string> FrameStrings;
@@ -625,9 +578,9 @@ Keypad 6
 	/// </summary>
 	public struct Snapshot
 	{
-		public float Timestamp; //{ get; private set; }
-		public Vector3 Pos; //{ get; private set; }
-		public Quaternion Rot; //{ get; private set; }
+		public float Timestamp;
+		public Vector3 Pos;
+		public Quaternion Rot;
 
 		public Snapshot(float timestamp, Vector3 position, Quaternion rotation)
 		{
@@ -637,28 +590,30 @@ Keypad 6
 		}
 
 		/// <summary>
-		/// Creates a snapshot object from a compressed snapshot json string.
+		/// Creates a snapshot object from a compressed snapshot string.
 		/// </summary>
 		public Snapshot(string compressedJson)
 		{
-			var loadedJson = JSON.Load(compressedJson);
-			Timestamp = loadedJson["Timestamp"];
-			Pos = new Vector3(loadedJson["Pos"][0], loadedJson["Pos"][1], loadedJson["Pos"][2]);
-			Rot = new Quaternion(loadedJson["Rot"][0], loadedJson["Rot"][1], loadedJson["Rot"][2], loadedJson["Rot"][3]);
+			//Timestamp|Pos|Rot
+			//"0|0,0,0|0,0,0,0"
+			string[] parts = compressedJson.Split('|');
+			string[] posParts = parts[1].Split(',');
+			string[] rotParts = parts[2].Split(',');
+
+			Timestamp = float.Parse(parts[0]);
+			Pos = new Vector3(float.Parse(posParts[0]), float.Parse(posParts[1]), float.Parse(posParts[2]));
+			Rot = new Quaternion(float.Parse(rotParts[0]), float.Parse(rotParts[1]), float.Parse(rotParts[2]), float.Parse(rotParts[3]));
 		}
 
 
 		/// <summary>
-		/// Returns the Snapshot as a compact JSON string.
+		/// Returns the Snapshot as a super compact JSON string.
 		/// </summary>
-		public override string ToString()
+		public override readonly string ToString()
 		{
-			//{"Timestamp":0, "Pos":[0, 0, 0], "Rot":[0, 0, 0, 0]}
-			return "{\"Timestamp\":"+Timestamp+", \"Pos\":["+Pos.x+","+Pos.y+","+Pos.z+"], \"Rot\":["+Rot.x+","+Rot.y+","+Rot.z+","+Rot.w+"]}";
-
 			//Timestamp|Pos|Rot
 			//"0|0,0,0|0,0,0,0"
-			//return $"{Timestamp}|{Pos.x},{Pos.y},{Pos.z}|{Rot.x},{Rot.y},{Rot.z},{Rot.w},";
+			return $"{Timestamp}|{Pos.x},{Pos.y},{Pos.z}|{Rot.x},{Rot.y},{Rot.z},{Rot.w}";
 		}
 	}
 
