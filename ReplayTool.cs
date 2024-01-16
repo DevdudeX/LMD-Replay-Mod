@@ -2,6 +2,7 @@
 using ReplayMod;
 using MelonLoader;
 using MelonLoader.TinyJSON;
+using LMD_ModMenu;
 
 // Unity
 using UnityEngine;
@@ -11,15 +12,15 @@ using Il2CppMegagon.Downhill.Players;
 using Il2CppMegagon.Downhill.Vehicle.Controller;
 
 
-[assembly: MelonInfo(typeof(ReplayTool), "Replay Tool", "0.0.4", "DevdudeX")]
-[assembly: MelonGame()]
+[assembly: MelonInfo(typeof(ReplayTool), "Replay Tool", "0.0.5", "DevdudeX", "github.com/DevdudeX/LMD-Replay-Mod")]
+[assembly: MelonGame("Megagon Industries","Lonely Mountains: Downhill")]
 namespace ReplayMod
 {
 	public class ReplayTool : MelonMod
 	{
 		// Keep this updated!
-		private const string MOD_VERSION = "0.0.4";
-		private const string FORMAT_VERSION = "0.0.0";	// Bump this for format changes
+		private const string MOD_VERSION = "0.0.5";
+		private const string FORMAT_VERSION = "0.0.0";	// Bump this for replay format changes
 		public static ReplayTool instance;
 		private static bool forceDisable = false;
 
@@ -52,7 +53,7 @@ namespace ReplayMod
 		public override void OnEarlyInitializeMelon()
 		{
 			instance = this;
-			MelonEvents.OnGUI.Subscribe(DrawVersionText, 100);
+			//MelonEvents.OnGUI.Subscribe(DrawVersionText, 100);	//FIXME:
 		}
 
 		public override void OnInitializeMelon()
@@ -67,6 +68,18 @@ namespace ReplayMod
 			cfg_autoSave = mainSettingsCat.CreateEntry<bool>("AutoSaveOnTrackFinish", false);
 
 			mainSettingsCat.SaveToFile();
+
+			// Mod Menu
+			MenuManager.Instance.RegisterAction(this.Info.Name, "Start Recording", 0, MenuStartRecording);
+			MenuManager.Instance.RegisterAction(this.Info.Name, "Stop Recording", 1, MenuStopRecording);
+			MenuManager.Instance.RegisterAction(this.Info.Name, "Start Replay", 2, MenuStartReplay);
+			MenuManager.Instance.RegisterAction(this.Info.Name, "Stop Replay", 3, MenuStopReplay);
+
+			MenuManager.Instance.RegisterAction(this.Info.Name, "Save Replay", 4, MenuSaveReplay);
+			MenuManager.Instance.RegisterAction(this.Info.Name, "Load Replay", 5, MenuLoadReplay);
+
+
+			MenuManager.Instance.RegisterInfoItem(this.Info.Name, "State: ", 6, GetReplayState);
 		}
 
 		public override void OnSceneWasLoaded(int buildIndex, string sceneName)
@@ -493,6 +506,75 @@ namespace ReplayMod
 			return loadedSegment;
 		}
 
+
+
+		// MOD MENU CONTROLS ==============
+		// Recording
+		void MenuStartRecording(int callbackID)
+		{
+			if (!_isRecording) {
+				StartRecording();
+			}
+			else {
+				LoggerInstance.Warning("Already recording!");
+			}
+		}
+		void MenuStopRecording(int callbackID)
+		{
+			if (_isRecording) {
+				StopRecording();
+			}
+			else {
+				LoggerInstance.Warning("Not currently recording!");
+			}
+		}
+
+		// Replays
+		void MenuStartReplay(int callbackID)
+		{
+			if (!_isReplaying) {
+				StartReplay();
+			}
+			else {
+				LoggerInstance.Warning("Already running replay!");
+			}
+		}
+		void MenuStopReplay(int callbackID)
+		{
+			if (_isReplaying) {
+				StopReplay();
+			}
+			else {
+				LoggerInstance.Warning("Can't stop, no active replay!");
+			}
+		}
+
+		// Saving and loading
+		void MenuSaveReplay(int callbackID)
+		{
+			SaveReplay();
+		}
+		void MenuLoadReplay(int callbackID)
+		{
+			LoadAndPlayReplay();
+		}
+
+		/// <summary>
+		/// Returns the tools current state as a simple string.
+		/// </summary>
+		public string GetReplayState()
+		{
+			string state = "Inactive";
+			if(_isRecording) {
+				state = "Recording Replay";
+			}
+			else if (_isReplaying) {
+				state = "Running Replay";
+			}
+
+			return state;
+		}
+
 		public void DrawInfoText()
 		{
 			float xOffset = 10;
@@ -530,6 +612,7 @@ Keypad 6
 
 		public static void DrawVersionText()
 		{
+			// TODO: Remove this once mod ui is ready
 			GUI.Label(new Rect(20, 20, 1000, 200), "<b><color=white><size=15>Replay Tool v"+ MOD_VERSION +"</size></color></b>");
 		}
 		public override void OnDeinitializeMelon()
@@ -607,7 +690,6 @@ Keypad 6
 			Pos = new Vector3(float.Parse(posParts[0]), float.Parse(posParts[1]), float.Parse(posParts[2]));
 			Rot = new Quaternion(float.Parse(rotParts[0]), float.Parse(rotParts[1]), float.Parse(rotParts[2]), float.Parse(rotParts[3]));
 		}
-
 
 		/// <summary>
 		/// Returns the Snapshot as a super compact JSON string.

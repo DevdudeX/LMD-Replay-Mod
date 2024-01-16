@@ -18,13 +18,16 @@ Run the game once then exit. (See **Known Issues & Fixes** if your game freezes 
 If successful the Melon Loader splash screen should appear on launch. 
 
 Download `ReplayTool.dll` from the releases and add it to the `Mods` folder in your LMD game folder.  
+Create a folder called `Replays` in your main game folder (make sure it's visible next to the `Mods` folder).  
 
-#### Loading The Mod In-Game
+
+#### Usage
 After loading into a level wait to be able to move the bike then hit the start recording button.  
 
 
+
 #### Tweaking values
-A config file is generated in `[LMD folder]/UserData/ReplayModSettings.cfg`.  
+A config file is generated in `[LMD folder]/UserData/ReplayToolSettings.cfg`.  
 This file can be opened with any text editor and contains all the mods settings.  
 
 
