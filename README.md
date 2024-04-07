@@ -2,7 +2,7 @@
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/L4L5S9BK3)
 
 A MelonLoader mod that aims to let you replay your movement to record at different angles.
-Very early in development so expect bugs.
+Very early in development so expect potential bugs.
 
 
 ## Setup Instructions
@@ -24,8 +24,6 @@ Create a folder called `Replays` in your main game folder (make sure it's visibl
 #### Usage
 After loading into a level wait to be able to move the bike then hit the start recording button.  
 
-
-
 #### Tweaking values
 A config file is generated in `[LMD folder]/UserData/ReplayToolSettings.cfg`.  
 This file can be opened with any text editor and contains all the mods settings.  
@@ -38,6 +36,19 @@ This file can be opened with any text editor and contains all the mods settings.
 | R + Keypad 8          |              | Start / Stop Replay                  |
 | R + Keypad 9          |              | Save to JSON                         |
 | R + Keypad 6          |              | Load from JSON                       |
+
+#### What Gets Saved
+:heavy_check_mark: Complete
+:x: Incomplete / not available
+:construction::wrench: Work in Progress
+
+| Feature                  | Status               
+| ---                      | ---                  
+| Position                 |:heavy_check_mark:    
+| Rotation                 |:heavy_check_mark:    
+| Animations               |:x::construction::wrench:
+| Particles                |:x:                   
+| Crash Ragdolls           |:x:                   
 
 
 #### Known Issues & Fixes

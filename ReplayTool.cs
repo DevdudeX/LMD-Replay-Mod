@@ -34,6 +34,7 @@ namespace ReplayMod
 		private Transform _playerBikeTransform;
 		private BikeLocomotion _bikeMoveScript;
 		private GameObject _playerReplayClone;
+		private Animator _bikeAnimator;
 
 		private GameObject _finishLine;
 		FinishLineTriggerReader _finishTriggerReader;
@@ -45,7 +46,9 @@ namespace ReplayMod
 		private int _index2;
 		private float _timer;
 		private float _timeValue;
+
 		private List<Snapshot> _frames;
+		private List<AnimationRecord> _currentFrameAnimRecords;
 
 		private string _activeSceneName;
 		private ReplayMode _replayMode = ReplayMode.Ghost;
@@ -53,7 +56,6 @@ namespace ReplayMod
 		public override void OnEarlyInitializeMelon()
 		{
 			instance = this;
-			//MelonEvents.OnGUI.Subscribe(DrawVersionText, 100);	//FIXME:
 		}
 
 		public override void OnInitializeMelon()
@@ -133,12 +135,12 @@ namespace ReplayMod
 				checkpointNum = int.Parse(checkpointName);
 			}
 
-			LoggerInstance.Msg($"OnCheckpointEnter! Name: {checkpointName}, Value: {checkpointNum}");
+			//LoggerInstance.Msg($"OnCheckpointEnter! Name: {checkpointName}, Value: {checkpointNum}");
 		}
 
 		public void OnFinishLineEnter(Collider other)
 		{
-			LoggerInstance.Msg($"OnFinishLineEnter! Other: {other.gameObject.name}");
+			//LoggerInstance.Msg($"OnFinishLineEnter! Other: {other.gameObject.name}");
 
 			if ((cfg_autoStop.Value || cfg_autoSave.Value) && _isRecording)
 			{
@@ -250,6 +252,9 @@ namespace ReplayMod
 			if (_bikeMoveScript == null) {
 				_bikeMoveScript = _playerBikeTransform.GetComponent<BikeLocomotion>();
 			}
+			if (_bikeAnimator == null) {
+				_bikeAnimator = GameObject.Find("Bike(Clone)/bike").GetComponent<Animator>();
+			}
 		}
 
 		public void StartRecording()
@@ -337,10 +342,33 @@ namespace ReplayMod
 
 			if (_timer >= 1 / cfg_recordFrequency.Value)
 			{
+
+				// _currentFrameAnimRecords = new List<AnimationRecord>();
+				// if (_bikeAnimator != null)
+				// {
+				// 	foreach (AnimatorControllerParameter item in _bikeAnimator.parameters)
+				// 	{
+				// 		string name = item.name;
+				// 		if (item.type == AnimatorControllerParameterType.Bool)
+				// 		{
+				// 			_currentFrameAnimRecords.Add(new AnimationRecord(name, _bikeAnimator.GetBool(name), item.type));
+				// 		}
+				// 		else if (item.type == AnimatorControllerParameterType.Float)
+				// 		{
+				// 			_currentFrameAnimRecords.Add(new AnimationRecord(name, _bikeAnimator.GetFloat(name), item.type));
+				// 		}
+				// 		else if (item.type == AnimatorControllerParameterType.Int)
+				// 		{
+				// 			_currentFrameAnimRecords.Add(new AnimationRecord(name, _bikeAnimator.GetInteger(name), item.type));
+				// 		}
+				// 	}
+				// }
+
 				Snapshot newFrame = new Snapshot(
 					_timeValue,
 					_playerBikeTransform.position,
-					_playerBikeTransform.rotation
+					_playerBikeTransform.rotation,
+					_currentFrameAnimRecords
 				);
 
 				_frames.Add(newFrame);
@@ -361,8 +389,9 @@ namespace ReplayMod
 				}
 				else if (_replayMode == ReplayMode.PlayerControl)
 				{
-					// FIXME:
 					SetTransformState();
+					// FIXME:
+					//SetAnimationState();
 				}
 			}
 			else {
@@ -408,6 +437,42 @@ namespace ReplayMod
 
 				_playerBikeTransform.position = Vector3.Lerp(_frames[_index1].Pos, _frames[_index2].Pos, interpolationFactor);
 				_playerBikeTransform.rotation = Quaternion.Slerp(_frames[_index1].Rot, _frames[_index2].Rot, interpolationFactor);
+			}
+		}
+
+		/// <summary>
+		/// Applies the bike animation of a frame to the players bike object.
+		/// </summary>
+		public void SetAnimationState()
+		{
+			if (_index1 == _index2)
+			{
+				// Do something
+			}
+			else
+			{
+				LoggerInstance.Warning("Frame index mismatch in SetAnimationState.");
+			}
+
+			//FIXME:
+			foreach (AnimationRecord item in _frames[_index1].AnimationRecords)
+			{
+				string name = item.ParamName;
+				if (item.ParamType == AnimatorControllerParameterType.Bool)
+				{
+					_bikeAnimator.SetBool(name, item.Value_bool);
+					continue;
+				}
+				else if (item.ParamType == AnimatorControllerParameterType.Int)
+				{
+					_bikeAnimator.SetInteger(name, item.Value_int);
+					continue;
+				}
+				else if (item.ParamType == AnimatorControllerParameterType.Float)
+				{
+					_bikeAnimator.SetFloat(name, item.Value_float);
+					continue;
+				}
 			}
 		}
 
@@ -668,11 +733,14 @@ Keypad 6
 		public Vector3 Pos;
 		public Quaternion Rot;
 
-		public Snapshot(float timestamp, Vector3 position, Quaternion rotation)
+		public List<AnimationRecord> AnimationRecords;
+
+		public Snapshot(float timestamp, Vector3 position, Quaternion rotation, List<AnimationRecord> animRecords)
 		{
 			Timestamp = timestamp;
 			Pos = position;
 			Rot = rotation;
+			AnimationRecords = animRecords;
 		}
 
 		/// <summary>
@@ -687,8 +755,15 @@ Keypad 6
 			string[] rotParts = parts[2].Split(',');
 
 			Timestamp = float.Parse(parts[0]);
+			//Pos = new Vector3(float.Parse(posParts[0]), float.Parse(posParts[1]), float.Parse(posParts[2]));
+			//Rot = new Quaternion(float.Parse(rotParts[0]), float.Parse(rotParts[1]), float.Parse(rotParts[2]), float.Parse(rotParts[3]));
+
 			Pos = new Vector3(float.Parse(posParts[0]), float.Parse(posParts[1]), float.Parse(posParts[2]));
 			Rot = new Quaternion(float.Parse(rotParts[0]), float.Parse(rotParts[1]), float.Parse(rotParts[2]), float.Parse(rotParts[3]));
+
+			//Math.Round(Pos.x, 4)
+
+			AnimationRecords = new List<AnimationRecord>();
 		}
 
 		/// <summary>
@@ -698,7 +773,39 @@ Keypad 6
 		{
 			//Timestamp|Pos|Rot
 			//"0|0,0,0|0,0,0,0"
-			return $"{Timestamp}|{Pos.x},{Pos.y},{Pos.z}|{Rot.x},{Rot.y},{Rot.z},{Rot.w}";
+			//return $"{Timestamp}|{Pos.x},{Pos.y},{Pos.z}|{Rot.x},{Rot.y},{Rot.z},{Rot.w}";
+			return $"{Timestamp}|{Pos.x:#.####},{Pos.y:#.####},{Pos.z:#.####}|{Rot.x:#.####},{Rot.y:#.####},{Rot.z:#.####},{Rot.w:#.####}";
+		}
+	}
+
+	public class AnimationRecord
+	{
+		public string ParamName;
+
+		public float Value_float;
+		public int Value_int;
+		public bool Value_bool;
+
+		public AnimatorControllerParameterType ParamType;
+
+
+		public AnimationRecord(string name, float value, AnimatorControllerParameterType ty)
+		{
+			Value_float = value;
+			ParamName = name;
+			ParamType = ty;
+		}
+		public AnimationRecord(string name, int value, AnimatorControllerParameterType ty)
+		{
+			Value_int = value;
+			ParamName = name;
+			ParamType = ty;
+		}
+		public AnimationRecord(string name, bool value, AnimatorControllerParameterType ty)
+		{
+			Value_bool = value;
+			ParamName = name;
+			ParamType = ty;
 		}
 	}
 
