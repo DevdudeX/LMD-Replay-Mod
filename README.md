@@ -8,6 +8,7 @@ Very early in development so expect potential bugs.
 ## Setup Instructions
 #### Preparing
 Your game folder can be found by right-clicking on the game in steam and going 'Manage -> Browse local files'  
+Alternatively, for other platforms/storefronts, you will simply need to navigate to your game installation folder manually.  
 
 Install Melon Loader to your LMD game install folder.  
 Look under 'Automated Installation':  
@@ -17,7 +18,7 @@ https://melonwiki.xyz/#/
 Run the game once then exit. (See **Known Issues & Fixes** if your game freezes on quit)  
 If successful the Melon Loader splash screen should appear on launch. 
 
-Download `ReplayTool.dll` from the releases and add it to the `Mods` folder in your LMD game folder.  
+Download `ReplayTool.dll` from the [Releases](https://github.com/DevdudeX/LMD-Replay-Mod/releases/latest) and add it to the `Mods` folder in your LMD game folder.  
 Create a folder called `Replays` in your main game folder (make sure it's visible next to the `Mods` folder).  
 
 
@@ -30,12 +31,14 @@ This file can be opened with any text editor and contains all the mods settings.
 
 
 #### Keybinds
-| Keyboard & Mouse      | Gamepad      | Action                               |
-| ---                   | ---          | ---                                  |
-| R + Keypad 7          |              | Start / Stop Recording               |
-| R + Keypad 8          |              | Start / Stop Replay                  |
-| R + Keypad 9          |              | Save to JSON                         |
-| R + Keypad 6          |              | Load from JSON                       |
+Alternatively you can use the [Mod Menu](https://github.com/DevdudeX/LMD-ModMenu/releases/latest) for a visual interface.
+| Action                               | Keyboard & Mouse      | Gamepad      |
+| ---                                  | ---                   | ---          |
+| Start / Stop Recording               | R + Keypad 7          |              |
+| Start / Stop Replay                  | R + Keypad 8          |              |
+| Save to JSON                         | R + Keypad 9          |              |
+| Load from JSON                       | R + Keypad 6          |              |
+
 
 #### What Gets Saved
 :heavy_check_mark: Complete
