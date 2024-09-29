@@ -2,7 +2,6 @@
 using ReplayMod;
 using MelonLoader;
 using MelonLoader.TinyJSON;
-using LMD_ModMenu;
 
 // Unity
 using UnityEngine;
@@ -12,16 +11,18 @@ using Il2CppMegagon.Downhill.Players;
 using Il2CppMegagon.Downhill.Vehicle.Controller;
 
 
-[assembly: MelonInfo(typeof(ReplayTool), "Replay Tool", "0.0.5", "DevdudeX", "github.com/DevdudeX/LMD-Replay-Mod")]
+[assembly: MelonInfo(typeof(ReplayTool), "Replay Tool", "0.0.6", "DevdudeX", "github.com/DevdudeX/LMD-Replay-Mod")]
 [assembly: MelonGame("Megagon Industries","Lonely Mountains: Downhill")]
 namespace ReplayMod
 {
 	public class ReplayTool : MelonMod
 	{
 		// Keep this updated!
-		private const string MOD_VERSION = "0.0.5";
+		private const string MOD_VERSION = "0.0.6";
 		private const string FORMAT_VERSION = "0.0.0";	// Bump this for replay format changes
 		public static ReplayTool instance;
+		/// <summary>In charge of Mod Menu integration.</summary>
+		private static ModMenuHandler modMenuHandler;
 		private static bool forceDisable = false;
 
 		private MelonPreferences_Category mainSettingsCat;
@@ -71,17 +72,15 @@ namespace ReplayMod
 
 			mainSettingsCat.SaveToFile();
 
-			// Mod Menu
-			MenuManager.Instance.RegisterAction(this.Info.Name, "Start Recording", 0, MenuStartRecording);
-			MenuManager.Instance.RegisterAction(this.Info.Name, "Stop Recording", 1, MenuStopRecording);
-			MenuManager.Instance.RegisterAction(this.Info.Name, "Start Replay", 2, MenuStartReplay);
-			MenuManager.Instance.RegisterAction(this.Info.Name, "Stop Replay", 3, MenuStopReplay);
-
-			MenuManager.Instance.RegisterAction(this.Info.Name, "Save Replay", 4, MenuSaveReplay);
-			MenuManager.Instance.RegisterAction(this.Info.Name, "Load Replay", 5, MenuLoadReplay);
-
-
-			MenuManager.Instance.RegisterInfoItem(this.Info.Name, "State: ", 6, GetReplayState);
+			// Hacky check for if the Mod Menu plugin is also installed
+			foreach (MelonBase melon in MelonBase.RegisteredMelons)
+			{
+				if (melon.Info.Name == "Mod Menu")
+				{
+					modMenuHandler = new ModMenuHandler();
+					modMenuHandler.HandleOnInitializeMelon(this);
+				}
+			}
 		}
 
 		public override void OnSceneWasLoaded(int buildIndex, string sceneName)
@@ -571,11 +570,9 @@ namespace ReplayMod
 			return loadedSegment;
 		}
 
-
-
-		// MOD MENU CONTROLS ==============
+		#region Mod Menu Access
 		// Recording
-		void MenuStartRecording(int callbackID)
+		public void MStartRecording()
 		{
 			if (!_isRecording) {
 				StartRecording();
@@ -584,7 +581,7 @@ namespace ReplayMod
 				LoggerInstance.Warning("Already recording!");
 			}
 		}
-		void MenuStopRecording(int callbackID)
+		public void MStopRecording()
 		{
 			if (_isRecording) {
 				StopRecording();
@@ -595,7 +592,7 @@ namespace ReplayMod
 		}
 
 		// Replays
-		void MenuStartReplay(int callbackID)
+		public void MStartReplay()
 		{
 			if (!_isReplaying) {
 				StartReplay();
@@ -604,7 +601,7 @@ namespace ReplayMod
 				LoggerInstance.Warning("Already running replay!");
 			}
 		}
-		void MenuStopReplay(int callbackID)
+		public void MStopReplay()
 		{
 			if (_isReplaying) {
 				StopReplay();
@@ -615,14 +612,16 @@ namespace ReplayMod
 		}
 
 		// Saving and loading
-		void MenuSaveReplay(int callbackID)
+		public void MSaveReplay()
 		{
 			SaveReplay();
 		}
-		void MenuLoadReplay(int callbackID)
+		public void MLoadReplay()
 		{
 			LoadAndPlayReplay();
 		}
+
+		#endregion
 
 		/// <summary>
 		/// Returns the tools current state as a simple string.
