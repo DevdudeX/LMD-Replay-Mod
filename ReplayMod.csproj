@@ -4,7 +4,7 @@
     <TargetFramework>net6.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <AssemblyName>ReplayTool</AssemblyName>
+    <AssemblyName>LMD_ReplayTool</AssemblyName>
     <Authors>DevdudeX</Authors>
     <Description>DevdudeX's replay tool.</Description>
   </PropertyGroup>
@@ -22,8 +22,8 @@
     <Reference Include="Il2Cppmscorlib">
       <HintPath>..\..\SteamLibrary\steamapps\common\Lonely Mountains - Downhill\MelonLoader\Il2CppAssemblies\Il2Cppmscorlib.dll</HintPath>
     </Reference>
-    <Reference Include="LMD-ModMenu">
-      <HintPath>..\LMD-ModMenu\bin\Release\LMD-ModMenu.dll</HintPath>
+    <Reference Include="LM_ModMenu">
+      <HintPath>..\ModMenu\bin\Release\LM_ModMenu.dll</HintPath>
     </Reference>
     <Reference Include="MelonLoader">
       <HintPath>..\..\SteamLibrary\steamapps\common\Lonely Mountains - Downhill\MelonLoader\net6\MelonLoader.dll</HintPath>
@@ -58,7 +58,7 @@
   </ItemGroup>
 
   <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-    <Exec Command="copy /Y &quot;$(TargetPath)&quot; &quot;D:\SteamLibrary\steamapps\common\Lonely Mountains - Downhill\Mods&quot;" />
+    <Exec Command="copy /Y &quot;$(TargetPath)&quot; &quot;D:\SteamLibrary\steamapps\common\Lonely Mountains - Downhill\Mods&quot;&#xD;&#xA;echo Copied to 'D:\SteamLibrary\steamapps\common\Lonely Mountains - Downhill\Mods'" />
   </Target>
 
 </Project>
